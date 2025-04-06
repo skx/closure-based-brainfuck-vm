@@ -21,5 +21,7 @@ The functions each return a value which controls where to execute next.  Most fu
 This was inspired by the following article:
 
 * [Faster interpreters in Go: Catching up with C++](https://planetscale.com/blog/faster-interpreters-in-go-catching-up-with-cpp)
+  * [https://news.ycombinator.com/item?id=43595283](https://news.ycombinator.com/item?id=43595283)
+
 
 The implementation here is simple enough to allow simple mathematical operations to be carried out, to prove the concept without getting bogged down in needless details.

@@ -23,8 +23,8 @@ type VM struct {
 type vmFunc func(vm *VM) int
 
 // New is the VM constructor
-func New() *VM {
-	return &VM{}
+func New(prog []vmFunc) *VM {
+	return &VM{program: prog}
 }
 
 // newInt creates, and returns, a closure which adds the float value to the program stack.
@@ -64,33 +64,21 @@ func mathOp(op string) vmFunc {
 	}
 }
 
+func printOp() vmFunc {
+	return func(v *VM) int {
+		if len(v.stack) > 0 {
+			fmt.Printf("%f\n", v.stack[len(v.stack)-1])
+		} else {
+			fmt.Printf("stack is empty\n")
+		}
+		return 1
+	}
+}
+
 // RunProgram creates a simple program and executes it.
 func (vm *VM) RunProgram() {
 
 	// The stack is empty remember.
-
-	// Create a basic program.
-
-	// 3
-	vm.program = append(vm.program, newInt(3))
-
-	// 42
-	vm.program = append(vm.program, newInt(42))
-
-	// +
-	vm.program = append(vm.program, mathOp("+"))
-
-	// show
-	vm.program = append(vm.program,
-		func(v *VM) int {
-			x := 0.0
-
-			x, v.stack = v.stack[len(v.stack)-1], v.stack[:len(v.stack)-1]
-
-			fmt.Printf("RESULT:%f\n", x)
-			return 1
-		},
-	)
 
 	// Execute the program.
 	code := vm.program
@@ -99,7 +87,13 @@ func (vm *VM) RunProgram() {
 	// For each operation.  Run it
 	for ip < len(code) {
 
-		// Here the re
+		// Here the return value controls which operation
+		// we execute next by changing the offset within
+		// the code-array.
+		//
+		// We could allow loops by having the opcodes return
+		// different values.  In this example we only move
+		// forwards.
 		ip += code[ip](vm)
 	}
 }
@@ -107,6 +101,19 @@ func (vm *VM) RunProgram() {
 // main is our entrypoint and creates/runs a program.
 func main() {
 
-	v := New()
+	// Create a basic program.
+	prog := []vmFunc{}
+	prog = append(prog, newInt(3))
+	prog = append(prog, newInt(7))
+	prog = append(prog, mathOp("+")) // 3 + 7
+	prog = append(prog, printOp())
+	prog = append(prog, newInt(4.5)) // * 4.5
+	prog = append(prog, mathOp("*"))
+	prog = append(prog, printOp())
+
+	// create an interpreter to run that program.
+	v := New(prog)
+
+	// now launch it
 	v.RunProgram()
 }

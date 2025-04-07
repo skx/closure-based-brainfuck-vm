@@ -65,32 +65,36 @@ func newInt(n float64) vmFunc {
 	}
 }
 
-// mathOp creates, and returns, a closure which adds a mathematical operation to the program.
+// addOp creates, and returns, a closure which adds two numbers via the stack.
 //
 // We're stack-based so we pop our arguments, run the operation, and push the result.
-func mathOp(op string) vmFunc {
+func addOp() vmFunc {
 
 	return func(v *VM) int {
 		x := 0.0
 		y := 0.0
-		res := 0.0
 
 		x, v.stack = v.stack[len(v.stack)-1], v.stack[:len(v.stack)-1]
 		y, v.stack = v.stack[len(v.stack)-1], v.stack[:len(v.stack)-1]
 
-		switch op {
-		case "+":
-			res = x + y
-		case "-":
-			res = x - y
-		case "/":
-			res = x / y
-		case "*":
-			res = x * y
-		default:
-			panic("unknown operation")
-		}
-		v.stack = append(v.stack, res)
+		v.stack = append(v.stack, x+y)
+		return 1
+	}
+}
+
+// mulOp creates, and returns, a closure which multiplies two numbers via the stack.
+//
+// We're stack-based so we pop our arguments, run the operation, and push the result.
+func mulOp() vmFunc {
+
+	return func(v *VM) int {
+		x := 0.0
+		y := 0.0
+
+		x, v.stack = v.stack[len(v.stack)-1], v.stack[:len(v.stack)-1]
+		y, v.stack = v.stack[len(v.stack)-1], v.stack[:len(v.stack)-1]
+
+		v.stack = append(v.stack, x*y)
 		return 1
 	}
 }
@@ -118,11 +122,11 @@ func main() {
 	prog := []vmFunc{}
 	prog = append(prog, newInt(3))
 	prog = append(prog, newInt(7))
-	prog = append(prog, mathOp("+")) // 3 + 7
+	prog = append(prog, addOp()) // 3 + 7
 	prog = append(prog, printOp())
 
-	prog = append(prog, newInt(4.5)) // * 4.5
-	prog = append(prog, mathOp("*"))
+	prog = append(prog, newInt(4.5)) // [10] * 4.5
+	prog = append(prog, mulOp())
 	prog = append(prog, printOp())
 
 	// create an interpreter to run that program.

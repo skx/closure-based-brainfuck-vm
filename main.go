@@ -5,10 +5,13 @@
 // executed in turn.
 package main
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // VM contains the virtual machine, it mostly exists to host a stack and a
-// programs which has been "compiled" into a series of function-pointers.
+// program which has been "compiled" into a series of function-pointers.
 //
 // The VM will execute a program by calling each function-pointer in turn,
 // and those functions will be closures that mutate the state of the VM as
@@ -19,6 +22,9 @@ type VM struct {
 
 	// program contains the program we're going to execute.
 	program []vmFunc
+
+	// err records any error received when running the program.
+	err error
 }
 
 // New is the VM constructor
@@ -27,7 +33,7 @@ func New(prog []vmFunc) *VM {
 }
 
 // RunProgram executes the program which was given in the constructor.
-func (vm *VM) RunProgram() {
+func (vm *VM) RunProgram() error {
 
 	// Reset the state of the stack each run.
 	vm.stack = []float64{}
@@ -47,7 +53,14 @@ func (vm *VM) RunProgram() {
 		// different values.  In this example we only move
 		// forwards.
 		ip += code[ip](vm)
+
+		if vm.err != nil {
+			return vm.err
+		}
+
 	}
+
+	return nil
 }
 
 //
@@ -74,6 +87,11 @@ func addOp() vmFunc {
 		x := 0.0
 		y := 0.0
 
+		if len(v.stack) < 2 {
+			v.err = errors.New("stack underflow")
+			return 0
+		}
+
 		x, v.stack = v.stack[len(v.stack)-1], v.stack[:len(v.stack)-1]
 		y, v.stack = v.stack[len(v.stack)-1], v.stack[:len(v.stack)-1]
 
@@ -91,6 +109,11 @@ func mulOp() vmFunc {
 		x := 0.0
 		y := 0.0
 
+		if len(v.stack) < 2 {
+			v.err = errors.New("stack underflow")
+			return 0
+		}
+
 		x, v.stack = v.stack[len(v.stack)-1], v.stack[:len(v.stack)-1]
 		y, v.stack = v.stack[len(v.stack)-1], v.stack[:len(v.stack)-1]
 
@@ -99,14 +122,42 @@ func mulOp() vmFunc {
 	}
 }
 
+// divOp creates, and returns, a closure which divides two numbers via the stack.
+//
+// We're stack-based so we pop our arguments, run the operation, and push the result.
+func divOp() vmFunc {
+
+	return func(v *VM) int {
+		x := 0.0
+		y := 0.0
+
+		if len(v.stack) < 2 {
+			v.err = errors.New("stack underflow")
+			return 0
+		}
+
+		x, v.stack = v.stack[len(v.stack)-1], v.stack[:len(v.stack)-1]
+		y, v.stack = v.stack[len(v.stack)-1], v.stack[:len(v.stack)-1]
+
+		if y == 0 {
+			v.err = errors.New("division by zero")
+			return 0
+		}
+
+		v.stack = append(v.stack, x/y)
+		return 1
+	}
+}
+
 // printOp shows the value at the top of the stack.
 func printOp() vmFunc {
 	return func(v *VM) int {
-		if len(v.stack) > 0 {
-			fmt.Printf("%f\n", v.stack[len(v.stack)-1])
-		} else {
-			fmt.Printf("stack is empty\n")
+		if len(v.stack) < 1 {
+			v.err = errors.New("stack underflow")
+			return 0
 		}
+
+		fmt.Printf("%f\n", v.stack[len(v.stack)-1])
 		return 1
 	}
 }
@@ -133,5 +184,8 @@ func main() {
 	v := New(prog)
 
 	// now launch it
-	v.RunProgram()
+	err := v.RunProgram()
+	if err != nil {
+		fmt.Printf("error running program: %s\n", err)
+	}
 }

@@ -17,10 +17,15 @@ overhead, like so:
 The functions each do their thing, and bump the IP to move to the
 next instruction.
 
-* **NOTE**
-  * We kind cheat when it comes to STDOUT writing - we buffer output until we see a newline.
-  * This boosts the mandelbrot benchmark by about five seconds.
-  * I think it's a legitimate optimization, but it might be that you disagree.
+
+
+## STDOUT Buffering
+
+Brainfuck has only a pair of primitives for reading and writing to the console, and these work on single bytes at a time.  By default we buffer writes to STDOUT until we see a newline, which boosts the mandelbrot benchmark a decent amount.
+
+I think it's a legitimate optimization, but if you wish to disable it set the environmental variable `BUFFER_STDOUT` to the literal string `false`.
+
+You'll see that this has no runtime impact, the change here is in the compilation phase where we use a different closure depending on the value of the variable.
 
 
 

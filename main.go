@@ -103,6 +103,12 @@ func New(bf string) (*VM, error) {
 	i := 0
 	max := len(bf)
 
+	// Should we buffer writes to STDOUT?
+	buffer := true
+	if os.Getenv("BUFFER_STDOUT") == "false" {
+		buffer = false
+	}
+
 	// Walk each character
 	for i < max {
 
@@ -210,7 +216,11 @@ func New(bf string) (*VM, error) {
 		case ',':
 			v.program = append(v.program, makeRead())
 		case '.':
-			v.program = append(v.program, makeWrite())
+			if buffer {
+				v.program = append(v.program, makeWriteCached())
+			} else {
+				v.program = append(v.program, makeWrite())
+			}
 		case '[':
 			// loop open
 			loopStack = append(loopStack, len(v.program))
@@ -266,8 +276,10 @@ func (vm *VM) RunProgram() error {
 		if vm.err != nil {
 
 			// Show any pending output
-			fmt.Printf("%s\n", vm.stdout)
-			vm.stdout = ""
+			if vm.stdout != "" {
+				fmt.Printf("%s\n", vm.stdout)
+				vm.stdout = ""
+			}
 
 			// If it is the fake exit-program error
 			// then we ignore it.
@@ -347,9 +359,17 @@ func makeRead() vmFunc {
 	}
 }
 
-// makeWrite implements the brainfuck STDOUT-writing operation.
-// We cache output until we see a newline as a minor optimization.
+// makeWrite implements the brainfuck STDOUT-writing operation, with no caching.
 func makeWrite() vmFunc {
+	return func(v *VM) {
+		fmt.Printf("%c", v.memory[v.ptr])
+		v.ip++
+	}
+}
+
+// makeWriteCached implements the brainfuck STDOUT-writing operation.
+// We cache output until we see a newline as a minor optimization.
+func makeWriteCached() vmFunc {
 	return func(v *VM) {
 		// character to print
 		c := v.memory[v.ptr]

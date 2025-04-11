@@ -17,8 +17,10 @@ overhead, like so:
 The functions each do their thing, and bump the IP to move to the
 next instruction.
 
-* NOTE
-  * To handle loops we use a parallel input which is sub-optimal, but we live with it for the purposes of simplicity.
+* **NOTE**
+  * We kind cheat when it comes to STDOUT writing - we buffer output until we see a newline.
+  * This boosts the mandelbrot benchmark by about five seconds.
+  * I think it's a legitimate optimization, but it might be that you disagree.
 
 
 

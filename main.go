@@ -57,6 +57,10 @@ type VM struct {
 	// loops is used to lookup look bounds
 	loops map[int]int
 
+	// stdout holds output we should write to the console.
+	// save it away and show it all at once to speedup!
+	stdout string
+
 	// driver
 
 	// program contains the set of closures that we can
@@ -249,6 +253,10 @@ func (vm *VM) RunProgram() error {
 		// Did we get an error?
 		if vm.err != nil {
 
+			// Show any pending output
+			fmt.Printf("%s\n", vm.stdout)
+			vm.stdout = ""
+
 			// If it is the fake exit-program error
 			// then we ignore it.
 			if vm.err == ErrExit {
@@ -330,7 +338,17 @@ func makeRead() vmFunc {
 // makeWrite: brainfuck implementation
 func makeWrite() vmFunc {
 	return func(v *VM) {
-		fmt.Printf("%c", rune(v.memory[v.ptr]))
+		// character to print
+		c := v.memory[v.ptr]
+
+		// newline?  show all pending output
+		if c == '\n' {
+			fmt.Printf("%s\n", v.stdout)
+			v.stdout = ""
+		} else {
+			// otherwise save away
+			v.stdout += string(v.memory[v.ptr])
+		}
 		v.ip += 1
 	}
 }

@@ -2,12 +2,14 @@
 // a program into a series of closures which can then be iterated
 // over in turn.
 //
-// The intent behind this implementation is to show how a "real"
-// interpreter might work, built without the traditional approach
-// of compiling to, and walking, a series of bytecode values.
+// The intent behind this implementation is to show how a reasonably
+// fast and compact interpreter might work, despite being built without
+// the traditional approach of compiling to bytecode and then walking
+// that bytecode via a switch-operation.
 //
-// Bytecode interpreters are faster than AST-walking interpreters
-// however they need to have a lot of internal duplication:
+// Bytecode interpreters are certainly faster than AST-walking interpreters
+// however they have the downside that their implementation requires the
+// generation and execution halves to be keep in sync:
 //
 // * Some part of the code emits bytecode for each operation.
 //
@@ -15,11 +17,17 @@
 //
 // Keeping those two things in sync is annoying overhead, and also
 // the traditional "switch-based" interpretation of bytecode opcodes
-// is slow.
+// is slow, especially in golang.
 //
-// The idea here is that we walk over a series of function-pointers
-// and that is going to be fast.  We can do that because we generated
-// a series of closures containing each "opcode thing".
+// The idea implemented here is that we switch our core interpreter loop
+// into merely executing a series of function-pointers over and over again
+// until the program is complete.   These function-pointers refer to a series
+// of generated closures which our "compiler" has prepared/created.
+//
+// As each individual closure is short, and almost exclusively branchless,
+// we gain a speedup based on the absence of the cache-busting switch statement
+// we would otherwise be hit by, and we _also_ gain from the lack of code
+// duplication.
 package main
 
 import (
@@ -29,9 +37,8 @@ import (
 )
 
 var (
-	// ErrExit is a faux error we append to the end of all our
-	// input programs, and can thus be used to detect the end
-	// of a program.
+	// ErrExit is a "fake error" we append to the end of all our
+	// input programs.  These terminates execution cleanly.
 	ErrExit = errors.New("EXIT")
 )
 
@@ -54,31 +61,36 @@ type VM struct {
 	// memory is the memory-space the brainfuck program uses
 	memory [30000]int
 
-	// loops is used to lookup look bounds
+	// loops is used to lookup look bounds - these is populated
+	// in the constructor, New.
 	loops map[int]int
 
 	// stdout holds output we should write to the console.
-	// save it away and show it all at once to speedup!
+	//
+	// We do this because writing a single byte to STDOUT is inefficient
+	// and by buffering until we get a complete line we get a little
+	// speed-boost.
 	stdout string
 
 	// driver
 
 	// program contains the set of closures that we can
-	// execute one by one, to run the actual user program
+	// execute one by one, to run the actual compiled brainfuck program.
 	program []vmFunc
 
-	// err records any error received when running the program.
+	// err records any error received when running the brainfuck program.
 	err error
 }
 
 // New is the VM constructor which takes our program as input
-// and compiles it into a series of closures.  Some basic problems
-// are detected and returned here.
+// and compiles it into a series of closures.
 func New(bf string) (*VM, error) {
 
 	// Create empty VM
 	v := VM{}
 
+	// Setup a map for storing loop start/end pairs, along with
+	// a stack we can use to populate those as we compile.
 	v.loops = make(map[int]int)
 	loopStack := []int{}
 
@@ -239,16 +251,16 @@ func (vm *VM) RunProgram() error {
 	vm.ip = 0
 
 	// Execute the program.
-	code := vm.program
+	len := len(vm.program)
 
 	// For each operation.  Run it
-	for vm.ip < len(code) {
+	for vm.ip < len {
 
 		// Call the closure.
 		//
 		// Here we assume that each opcode ends with
 		// "vm.ip++", which lets us run forward.
-		code[vm.ip](vm)
+		vm.program[vm.ip](vm)
 
 		// Did we get an error?
 		if vm.err != nil {
@@ -275,17 +287,17 @@ func (vm *VM) RunProgram() error {
 // Okay here we write some helpers which create/return closures
 //
 
-// vmFunc is the type-signature of a mutating primitive we would implement.
+// vmFunc is the type-signature of our closures.
 type vmFunc func(vm *VM)
 
-// makeExit: brainfuck implementation
+// makeExit adds a closure which terminates execution.
 func makeExit() vmFunc {
 	return func(v *VM) {
 		v.err = ErrExit
 	}
 }
 
-// makeIncCell: brainfuck implementation
+// makeIncCell implements the brainfuck cell-increment operation.
 func makeIncCell(n int) vmFunc {
 	return func(v *VM) {
 		v.memory[v.ptr] += n
@@ -293,7 +305,7 @@ func makeIncCell(n int) vmFunc {
 	}
 }
 
-// makeDecCell: brainfuck implementation
+// makeDecCell implements the brainfuck cell-decrement operation.
 func makeDecCell(n int) vmFunc {
 	return func(v *VM) {
 		v.memory[v.ptr] -= n
@@ -301,7 +313,7 @@ func makeDecCell(n int) vmFunc {
 	}
 }
 
-// makeIncPtr: brainfuck implementation
+// makeIncPtr implements the brainfuck ptr-increment operation.
 func makeIncPtr(n int) vmFunc {
 	return func(v *VM) {
 		v.ptr += n
@@ -309,7 +321,7 @@ func makeIncPtr(n int) vmFunc {
 	}
 }
 
-// makeDecPtr: brainfuck implementation
+// makeDecPtr implements the brainfuck ptr-decrement operation.
 func makeDecPtr(n int) vmFunc {
 	return func(v *VM) {
 		v.ptr -= n
@@ -317,7 +329,7 @@ func makeDecPtr(n int) vmFunc {
 	}
 }
 
-// makeRead: brainfuck implementation
+// makeRead implements the brainfuck STDIN-reading operation.
 func makeRead() vmFunc {
 	return func(v *VM) {
 		buf := make([]byte, 1)
@@ -335,7 +347,8 @@ func makeRead() vmFunc {
 	}
 }
 
-// makeWrite: brainfuck implementation
+// makeWrite implements the brainfuck STDOUT-writing operation.
+// We cache output until we see a newline as a minor optimization.
 func makeWrite() vmFunc {
 	return func(v *VM) {
 		// character to print
@@ -353,7 +366,7 @@ func makeWrite() vmFunc {
 	}
 }
 
-// makeLoopOpen: brainfuck implementation
+// makeLoopOpen implements the brainfuck loop opening operation.
 func makeLoopOpen() vmFunc {
 	return func(v *VM) {
 		// early termination
@@ -366,7 +379,7 @@ func makeLoopOpen() vmFunc {
 	}
 }
 
-// makeLoopClose: brainfuck implementation
+// makeLoopClose implements the brainfuck loop closing operation.
 func makeLoopClose() vmFunc {
 	return func(v *VM) {
 
@@ -384,7 +397,8 @@ func makeLoopClose() vmFunc {
 // Closure time is over now.
 //
 
-// main is our entry-point and creates/runs a program.
+// main is our entry-point and reads/launches a brainfuck program
+// from an external file.
 func main() {
 
 	// No arguments?  Abort

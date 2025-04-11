@@ -133,7 +133,7 @@ func New(bf string) (*VM, error) {
 			// seen in adjacent positions
 			count := i - begin
 
-			i -= 1
+			i--
 			v.program = append(v.program, makeIncCell(count))
 		case '-':
 			// Record our starting position
@@ -157,7 +157,7 @@ func New(bf string) (*VM, error) {
 			// seen in adjacent positions
 			count := i - begin
 
-			i -= 1
+			i--
 			v.program = append(v.program, makeDecCell(count))
 		case '<':
 			// Record our starting position
@@ -181,7 +181,7 @@ func New(bf string) (*VM, error) {
 			// seen in adjacent positions
 			count := i - begin
 
-			i -= 1
+			i--
 			v.program = append(v.program, makeDecPtr(count))
 		case '>':
 			// Record our starting position
@@ -205,7 +205,7 @@ func New(bf string) (*VM, error) {
 			// seen in adjacent positions
 			count := i - begin
 
-			i -= 1
+			i--
 			v.program = append(v.program, makeIncPtr(count))
 		case ',':
 			v.program = append(v.program, makeRead())
@@ -301,7 +301,7 @@ func makeExit() vmFunc {
 func makeIncCell(n int) vmFunc {
 	return func(v *VM) {
 		v.memory[v.ptr] += n
-		v.ip += 1
+		v.ip++
 	}
 }
 
@@ -309,7 +309,7 @@ func makeIncCell(n int) vmFunc {
 func makeDecCell(n int) vmFunc {
 	return func(v *VM) {
 		v.memory[v.ptr] -= n
-		v.ip += 1
+		v.ip++
 	}
 }
 
@@ -317,7 +317,7 @@ func makeDecCell(n int) vmFunc {
 func makeIncPtr(n int) vmFunc {
 	return func(v *VM) {
 		v.ptr += n
-		v.ip += 1
+		v.ip++
 	}
 }
 
@@ -325,7 +325,7 @@ func makeIncPtr(n int) vmFunc {
 func makeDecPtr(n int) vmFunc {
 	return func(v *VM) {
 		v.ptr -= n
-		v.ip += 1
+		v.ip++
 	}
 }
 
@@ -343,7 +343,7 @@ func makeRead() vmFunc {
 			return
 		}
 		v.memory[v.ptr] = int(buf[0])
-		v.ip += 1
+		v.ip++
 	}
 }
 
@@ -360,9 +360,9 @@ func makeWrite() vmFunc {
 			v.stdout = ""
 		} else {
 			// otherwise save away
-			v.stdout += string(v.memory[v.ptr])
+			v.stdout += string(rune(v.memory[v.ptr]))
 		}
-		v.ip += 1
+		v.ip++
 	}
 }
 
@@ -371,7 +371,7 @@ func makeLoopOpen() vmFunc {
 	return func(v *VM) {
 		// early termination
 		if v.memory[v.ptr] != 0x00 {
-			v.ip += 1
+			v.ip++
 			return
 		}
 

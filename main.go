@@ -269,8 +269,6 @@ func (vm *VM) RunProgram() error {
 			return err
 		}
 	}
-
-	return nil
 }
 
 // Okay here we write some helpers which create/return closures

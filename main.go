@@ -33,9 +33,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
-	"runtime/pprof"
 )
 
 var (
@@ -403,13 +401,6 @@ func makeLoopClose(offset int) vmFunc {
 // main is our entry-point and reads/launches a brainfuck program
 // from an external file.
 func main() {
-
-	f, err := os.Create("profile")
-	if err != nil {
-		log.Fatal(err)
-	}
-	pprof.StartCPUProfile(f)
-	defer pprof.StopCPUProfile()
 
 	// No arguments?  Abort
 	if len(os.Args) != 2 {

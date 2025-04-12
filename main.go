@@ -79,27 +79,16 @@ type vmFunc func(vm *VM) error
 // and compiles it into a series of closures.
 func New(bf string) (*VM, error) {
 
-	// Create empty VM
-	v := VM{}
-
-	// Setup a map for storing loop start/end pairs, along with
-	// a stack we can use to populate those as we compile.
-	loops := make(map[int]int)
-	loopStack := []int{}
-
-	// Loop open-instructions we replace.
-	//
-	// So for loop close operates we're always jumping backwards, which means we
-	// can add the backwards offset as we compile the closure.  For jumping forward
-	// though we don't know (yet) what position to jump to.  So we just add a random
-	// value "jump forward -1", and record the offset in this slice as something
-	// we will fixup later.
-	replace := []int{}
-
 	// Ensure we got a program
 	if len(bf) < 1 {
 		return nil, errors.New("empty program is invalid")
 	}
+
+	// Create empty VM
+	v := VM{}
+
+	// Setup a stack we can use to match loops as we compile
+	loopStack := []int{}
 
 	// Should we buffer writes to STDOUT?
 	buffer := true
@@ -185,43 +174,31 @@ func New(bf string) (*VM, error) {
 			// loop open
 			loopStack = append(loopStack, len(v.program))
 
-			// Record this as something to be replaced.
-			replace = append(replace, len(v.program))
-
 			// This will get replaced later, but we need to add _something_
 			// to keep our offsets neat.
 			v.program = append(v.program, nil)
 
 		case ']':
-			// Pop position of last JumpIfZero ("[") instruction off stack
+			// So this is a loop-close, and we've got a stack which contains
+			// the loop-start.
+			//
+			// Pop off the topmost value, which is our loop open.
 			openInstruction := loopStack[len(loopStack)-1]
 			loopStack = loopStack[:len(loopStack)-1]
 
-			// loop points to the end - this is the offset that the loop
-			// open needs to use, but it wasn't available at the time.
-			//
-			// The "replace" slice will let us come back and fix that up to use
-			// this value later.
-			loops[openInstruction] = len(v.program)
+			// We want the open-instruction to point to the position of the
+			// close instruction we're just going to compile, so that's the
+			// length of the program:
+			v.program[openInstruction] = makeLoopOpen(len(v.program))
 
-			// end points to start
-			loops[len(v.program)] = openInstruction
-
-			// Now add the instruction
+			// Now add the instruction itself, which will jump back to the
+			// loop opening.
 			v.program = append(v.program, makeLoopClose(openInstruction))
 		default:
 			// Invalid character.
 			// ignored.
 		}
 		i++
-	}
-
-	// Fixup phase.
-	//
-	// Replace the loop opens with the value that should be used.
-	//
-	for _, n := range replace {
-		v.program[n] = makeLoopOpen(loops[n])
 	}
 
 	// Finally add a fake "exit" trap to the end of our program

@@ -1,3 +1,10 @@
+[![GoDoc](https://img.shields.io/static/v1?label=godoc&message=reference&color=blue)](https://pkg.go.dev/github.com/skx/closure-based-brainfuck-vm)
+[![Go Report Card](https://goreportcard.com/badge/github.com/skx//closure-based-brainfuck-vm)](https://goreportcard.com/report/github.com/skx//closure-based-brainfuck-vm)
+[![license](https://img.shields.io/github/license/skx//closure-based-brainfuck-vm.svg)](https://github.com/skx//closure-based-brainfuck-vm/blob/master/LICENSE)
+
+
+
+
 # A simple closure-based brainfuck interpreter
 
 This repository contains a trivial interpreter for brainfuck, which is designed
@@ -46,4 +53,3 @@ This was inspired by the following article:
 
 It is hoped the implementation here is simple enough to understand, and still
 demonstrate a decent speedup compared to the more obvious naive approaches.
-

@@ -1,6 +1,6 @@
 // package main contains a simple brainfuck interpreter which compiles
 // a program into a series of closures which can then be iterated
-// over in turn.
+// over in turn and executed.
 //
 // The intent behind this implementation is to show how a reasonably
 // fast and compact interpreter might work, despite being built without
@@ -38,7 +38,7 @@ import (
 
 var (
 	// ErrExit is a "fake error" we append to the end of all our
-	// input programs.  These terminates execution cleanly.
+	// input programs.  This will ensure the program terminates cleanly.
 	ErrExit = errors.New("EXIT")
 )
 
@@ -61,7 +61,7 @@ type VM struct {
 	// memory is the memory-space the brainfuck program uses
 	memory [30000]int
 
-	// loops is used to lookup look bounds - these is populated
+	// loops is used to lookup loop bounds - these is populated
 	// in the constructor, New.
 	loops map[int]int
 
@@ -82,6 +82,13 @@ type VM struct {
 	err error
 }
 
+// vmFunc is the type-signature of our closures.
+//
+// Each closure will have access to the VM object, which means it can bump the
+// ip pointer, to move to the next instruction, update the ptr, or memory, and
+// do similar things.
+type vmFunc func(vm *VM)
+
 // New is the VM constructor which takes our program as input
 // and compiles it into a series of closures.
 func New(bf string) (*VM, error) {
@@ -99,119 +106,77 @@ func New(bf string) (*VM, error) {
 		return nil, errors.New("empty program is invalid")
 	}
 
-	// Index and bounds
-	i := 0
-	max := len(bf)
-
 	// Should we buffer writes to STDOUT?
 	buffer := true
 	if os.Getenv("BUFFER_STDOUT") == "false" {
 		buffer = false
 	}
 
-	// Walk each character
+	// Index and bounds for walking the string of brainfuck source code
+	i := 0
+	max := len(bf)
+
+	// inline function - designed to count how many consecutive times
+	// we see the given character, c, repeated.  Returns the count and
+	// the updated index variable for the program source.
+	//
+	// This is a bit horrid, but avoids repetition in the handlers.
+	countRepeats := func(i int, c byte) (int, int) {
+		// Record our starting position in the program source.
+		begin := i
+
+		// See if this character is repeated.
+		for i < max {
+
+			// Not a repeat?  Stop
+			if bf[i] != c {
+				break
+			}
+
+			// Otherwise keep advancing forward
+			i++
+		}
+
+		// How many consecutive "+" did we see?
+		count := i - begin
+
+		// We'll end with an i++ so counter that
+		i--
+
+		return count, i
+	}
+
+	// Walk over the input program
 	for i < max {
 
-		// Handle each known character
+		// The character we're looking at right now.
 		c := bf[i]
 
+		// Handle each known character.
 		switch c {
 		case '+':
+			// Count how many times "+" was repeated
+			count := 0
+			count, i = countRepeats(i, c)
 
-			// Record our starting position
-			begin := i
-
-			// Loop forward to see how many times the character
-			// is repeated.
-			for i < max {
-
-				// If it isn't the same character
-				// we're done
-				if bf[i] != c {
-					break
-				}
-
-				// Otherwise keep advancing forward
-				i++
-			}
-
-			// Return the token and the times it was
-			// seen in adjacent positions
-			count := i - begin
-
-			i--
 			v.program = append(v.program, makeIncCell(count))
 		case '-':
-			// Record our starting position
-			begin := i
+			// Count how many times "-" was repeated
+			count := 0
+			count, i = countRepeats(i, c)
 
-			// Loop forward to see how many times the character
-			// is repeated.
-			for i < max {
-
-				// If it isn't the same character
-				// we're done
-				if bf[i] != c {
-					break
-				}
-
-				// Otherwise keep advancing forward
-				i++
-			}
-
-			// Return the token and the times it was
-			// seen in adjacent positions
-			count := i - begin
-
-			i--
 			v.program = append(v.program, makeDecCell(count))
 		case '<':
-			// Record our starting position
-			begin := i
+			// Count how many times "<" was repeated
+			count := 0
+			count, i = countRepeats(i, c)
 
-			// Loop forward to see how many times the character
-			// is repeated.
-			for i < max {
-
-				// If it isn't the same character
-				// we're done
-				if bf[i] != c {
-					break
-				}
-
-				// Otherwise keep advancing forward
-				i++
-			}
-
-			// Return the token and the times it was
-			// seen in adjacent positions
-			count := i - begin
-
-			i--
 			v.program = append(v.program, makeDecPtr(count))
 		case '>':
-			// Record our starting position
-			begin := i
+			// Count how many times ">" was repeated
+			count := 0
+			count, i = countRepeats(i, c)
 
-			// Loop forward to see how many times the character
-			// is repeated.
-			for i < max {
-
-				// If it isn't the same character
-				// we're done
-				if bf[i] != c {
-					break
-				}
-
-				// Otherwise keep advancing forward
-				i++
-			}
-
-			// Return the token and the times it was
-			// seen in adjacent positions
-			count := i - begin
-
-			i--
 			v.program = append(v.program, makeIncPtr(count))
 		case ',':
 			v.program = append(v.program, makeRead())
@@ -250,6 +215,7 @@ func New(bf string) (*VM, error) {
 	// Add a fake "exit" trap to the end of our program
 	v.program = append(v.program, makeExit())
 
+	// Return the VM, we're now ready to be executed.
 	return &v, nil
 }
 
@@ -260,7 +226,7 @@ func (vm *VM) RunProgram() error {
 	vm.ptr = 0
 	vm.ip = 0
 
-	// Execute the program.
+	// The program length
 	len := len(vm.program)
 
 	// For each operation.  Run it
@@ -295,12 +261,7 @@ func (vm *VM) RunProgram() error {
 	return nil
 }
 
-//
 // Okay here we write some helpers which create/return closures
-//
-
-// vmFunc is the type-signature of our closures.
-type vmFunc func(vm *VM)
 
 // makeExit adds a closure which terminates execution.
 func makeExit() vmFunc {

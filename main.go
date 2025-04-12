@@ -261,6 +261,7 @@ func makeExit() vmFunc {
 func makeIncCell(n int) vmFunc {
 	return func(v *VM) error {
 		v.memory[v.ptr] += n
+		v.memory[v.ptr] &= 0xff // cells are eight-bit.
 		v.ip++
 		return nil
 	}
@@ -270,6 +271,7 @@ func makeIncCell(n int) vmFunc {
 func makeDecCell(n int) vmFunc {
 	return func(v *VM) error {
 		v.memory[v.ptr] -= n
+		v.memory[v.ptr] &= 0xff // cells are eight-bit.
 		v.ip++
 		return nil
 	}

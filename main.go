@@ -33,7 +33,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
+	"runtime/pprof"
 )
 
 var (
@@ -43,13 +45,8 @@ var (
 )
 
 // VM contains the virtual machine, and it mostly exists to hold
-// the state of our brainfuck program.
-//
-// The state is both our compiled closures, and some notes for
-// interpretation (i.e. helpers for the loop-counters & etc).
+// the state of our brainfuck program, the pointer, memory, etc.
 type VM struct {
-
-	// brainfuck stuff
 
 	// ip is the instruction pointer into the brainfuck
 	// program which is to be executed.
@@ -68,14 +65,9 @@ type VM struct {
 	// speed-boost.
 	stdout string
 
-	// driver
-
 	// program contains the set of closures that we can
 	// execute one by one, to run the actual compiled brainfuck program.
 	program []vmFunc
-
-	// err records any error received when running the brainfuck program.
-	err error
 }
 
 // vmFunc is the type-signature of our closures.
@@ -83,7 +75,7 @@ type VM struct {
 // Each closure will have access to the VM object, which means it can bump the
 // ip pointer, to move to the next instruction, update the ptr, or memory, and
 // do similar things.
-type vmFunc func(vm *VM)
+type vmFunc func(vm *VM) error
 
 // New is the VM constructor which takes our program as input
 // and compiles it into a series of closures.
@@ -200,7 +192,7 @@ func New(bf string) (*VM, error) {
 
 			// This will get replaced later, but we need to add _something_
 			// to keep our offsets neat.
-			v.program = append(v.program, makeLoopOpen(-1))
+			v.program = append(v.program, nil)
 
 		case ']':
 			// Pop position of last JumpIfZero ("[") instruction off stack
@@ -248,20 +240,20 @@ func (vm *VM) RunProgram() error {
 	vm.ptr = 0
 	vm.ip = 0
 
-	// The program length
-	len := len(vm.program)
+	// Hold errors from the closures
+	var err error
 
 	// For each operation.  Run it
-	for vm.ip < len {
+	for {
 
 		// Call the closure.
 		//
 		// Here we assume that each opcode ends with
 		// "vm.ip++", which lets us run forward.
-		vm.program[vm.ip](vm)
+		err = vm.program[vm.ip](vm)
 
 		// Did we get an error?
-		if vm.err != nil {
+		if err != nil {
 
 			// Show any pending output
 			if vm.stdout != "" {
@@ -271,12 +263,12 @@ func (vm *VM) RunProgram() error {
 
 			// If it is the fake exit-program error
 			// then we ignore it.
-			if vm.err == ErrExit {
+			if err == ErrExit {
 				return nil
 			}
 
 			// otherwise return the error to the caller
-			return vm.err
+			return err
 		}
 	}
 
@@ -287,73 +279,77 @@ func (vm *VM) RunProgram() error {
 
 // makeExit adds a closure which terminates execution.
 func makeExit() vmFunc {
-	return func(v *VM) {
-		v.err = ErrExit
+	return func(v *VM) error {
+		return ErrExit
 	}
 }
 
 // makeIncCell implements the brainfuck cell-increment operation.
 func makeIncCell(n int) vmFunc {
-	return func(v *VM) {
+	return func(v *VM) error {
 		v.memory[v.ptr] += n
 		v.ip++
+		return nil
 	}
 }
 
 // makeDecCell implements the brainfuck cell-decrement operation.
 func makeDecCell(n int) vmFunc {
-	return func(v *VM) {
+	return func(v *VM) error {
 		v.memory[v.ptr] -= n
 		v.ip++
+		return nil
 	}
 }
 
 // makeIncPtr implements the brainfuck ptr-increment operation.
 func makeIncPtr(n int) vmFunc {
-	return func(v *VM) {
+	return func(v *VM) error {
 		v.ptr += n
 		v.ip++
+		return nil
 	}
 }
 
 // makeDecPtr implements the brainfuck ptr-decrement operation.
 func makeDecPtr(n int) vmFunc {
-	return func(v *VM) {
+	return func(v *VM) error {
 		v.ptr -= n
 		v.ip++
+		return nil
 	}
 }
 
 // makeRead implements the brainfuck STDIN-reading operation.
 func makeRead() vmFunc {
-	return func(v *VM) {
+	return func(v *VM) error {
 		buf := make([]byte, 1)
 		l, err := os.Stdin.Read(buf)
 		if err != nil {
-			v.err = err
-			return
+			return err
 		}
 		if l != 1 {
-			v.err = fmt.Errorf("read %d bytes of input, not 1", l)
-			return
+			return fmt.Errorf("read %d bytes of input, not 1", l)
 		}
 		v.memory[v.ptr] = int(buf[0])
 		v.ip++
+		return nil
 	}
 }
 
 // makeWrite implements the brainfuck STDOUT-writing operation, with no caching.
 func makeWrite() vmFunc {
-	return func(v *VM) {
+	return func(v *VM) error {
 		fmt.Printf("%c", v.memory[v.ptr])
 		v.ip++
+		return nil
 	}
 }
 
 // makeWriteCached implements the brainfuck STDOUT-writing operation.
 // We cache output until we see a newline as a minor optimization.
 func makeWriteCached() vmFunc {
-	return func(v *VM) {
+	return func(v *VM) error {
 		// character to print
 		c := v.memory[v.ptr]
 
@@ -366,33 +362,37 @@ func makeWriteCached() vmFunc {
 			v.stdout += string(rune(v.memory[v.ptr]))
 		}
 		v.ip++
+
+		return nil
 	}
 }
 
 // makeLoopOpen implements the brainfuck loop opening operation.
 func makeLoopOpen(offset int) vmFunc {
-	return func(v *VM) {
+	return func(v *VM) error {
 		// early termination
 		if v.memory[v.ptr] != 0x00 {
 			v.ip++
-			return
+			return nil
 		}
 
 		v.ip = offset
+		return nil
 	}
 }
 
 // makeLoopClose implements the brainfuck loop closing operation.
 func makeLoopClose(offset int) vmFunc {
-	return func(v *VM) {
+	return func(v *VM) error {
 
 		// early termination
 		if v.memory[v.ptr] == 0x00 {
 			v.ip++
-			return
+			return nil
 		}
 
 		v.ip = offset
+		return nil
 	}
 }
 
@@ -403,6 +403,13 @@ func makeLoopClose(offset int) vmFunc {
 // main is our entry-point and reads/launches a brainfuck program
 // from an external file.
 func main() {
+
+	f, err := os.Create("profile")
+	if err != nil {
+		log.Fatal(err)
+	}
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 
 	// No arguments?  Abort
 	if len(os.Args) != 2 {

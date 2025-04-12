@@ -1,6 +1,6 @@
 [![GoDoc](https://img.shields.io/static/v1?label=godoc&message=reference&color=blue)](https://pkg.go.dev/github.com/skx/closure-based-brainfuck-vm)
-[![Go Report Card](https://goreportcard.com/badge/github.com/skx//closure-based-brainfuck-vm)](https://goreportcard.com/report/github.com/skx//closure-based-brainfuck-vm)
-[![license](https://img.shields.io/github/license/skx//closure-based-brainfuck-vm.svg)](https://github.com/skx//closure-based-brainfuck-vm/blob/master/LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/skx/closure-based-brainfuck-vm)](https://goreportcard.com/report/github.com/skx//closure-based-brainfuck-vm)
+[![license](https://img.shields.io/github/license/skx//simple-vm.svg)](https://github.com/skx//closure-based-brainfuck-vm/blob/master/LICENSE)
 
 
 

@@ -1,4 +1,3 @@
-
 # A simple closure-based brainfuck interpreter
 
 This repository contains a trivial interpreter for brainfuck, which is designed
@@ -34,6 +33,25 @@ environmental variable `BUFFER_STDOUT` to the literal string `false`.
 You'll see that this has no runtime impact, the change here is in the
 compilation phase where we use a different closure depending on the value of
 the variable.
+
+
+
+## Other Speed Notes
+
+There are two things that this program is doing to be fast:
+
+* Avoiding complex control-flow, by which I mean that regardless of the operation which is being carried out we don't have to do any switch-base lookup.  We literally jump around within a static array of function pointers.
+* Avoiding doing too much work inside the closures.
+
+As a case in point we calculate the offsets for the forward/backward jumps as we compile the program.  We could use that in our handlers to run something like:
+
+     v.ip = v.loops[v.ip]
+
+However that map-lookup is slow.  So instead we hardcode the offset in the closures for the loop open instructions and the same again for the loop close.  This hardcoding makes the program a little more complex as we have to rewrite closures however the results speak for themselves:
+
+* Default: 35s
+* Replacing the map looking for the loop-close only: 21s
+* Replacing both map lookups: 17s
 
 
 

@@ -61,10 +61,6 @@ type VM struct {
 	// memory is the memory-space the brainfuck program uses
 	memory [30000]int
 
-	// loops is used to lookup loop bounds - these is populated
-	// in the constructor, New.
-	loops map[int]int
-
 	// stdout holds output we should write to the console.
 	//
 	// We do this because writing a single byte to STDOUT is inefficient
@@ -98,8 +94,17 @@ func New(bf string) (*VM, error) {
 
 	// Setup a map for storing loop start/end pairs, along with
 	// a stack we can use to populate those as we compile.
-	v.loops = make(map[int]int)
+	loops := make(map[int]int)
 	loopStack := []int{}
+
+	// Loop open-instructions we replace.
+	//
+	// So for loop close operates we're always jumping backwards, which means we
+	// can add the backwards offset as we compile the closure.  For jumping forward
+	// though we don't know (yet) what position to jump to.  So we just add a random
+	// value "jump forward -1", and record the offset in this slice as something
+	// we will fixup later.
+	replace := []int{}
 
 	// Ensure we got a program
 	if len(bf) < 1 {
@@ -190,21 +195,30 @@ func New(bf string) (*VM, error) {
 			// loop open
 			loopStack = append(loopStack, len(v.program))
 
-			v.program = append(v.program, makeLoopOpen())
+			// Record this as something to be replaced.
+			replace = append(replace, len(v.program))
+
+			// This will get replaced later, but we need to add _something_
+			// to keep our offsets neat.
+			v.program = append(v.program, makeLoopOpen(-1))
 
 		case ']':
 			// Pop position of last JumpIfZero ("[") instruction off stack
 			openInstruction := loopStack[len(loopStack)-1]
 			loopStack = loopStack[:len(loopStack)-1]
 
-			// loop points to the end
-			v.loops[openInstruction] = len(v.program)
+			// loop points to the end - this is the offset that the loop
+			// open needs to use, but it wasn't available at the time.
+			//
+			// The "replace" slice will let us come back and fix that up to use
+			// this value later.
+			loops[openInstruction] = len(v.program)
 
 			// end points to start
-			v.loops[len(v.program)] = openInstruction
+			loops[len(v.program)] = openInstruction
 
 			// Now add the instruction
-			v.program = append(v.program, makeLoopClose())
+			v.program = append(v.program, makeLoopClose(openInstruction))
 		default:
 			// Invalid character.
 			// ignored.
@@ -212,7 +226,15 @@ func New(bf string) (*VM, error) {
 		i++
 	}
 
-	// Add a fake "exit" trap to the end of our program
+	// Fixup phase.
+	//
+	// Replace the loop opens with the value that should be used.
+	//
+	for _, n := range replace {
+		v.program[n] = makeLoopOpen(loops[n])
+	}
+
+	// Finally add a fake "exit" trap to the end of our program
 	v.program = append(v.program, makeExit())
 
 	// Return the VM, we're now ready to be executed.
@@ -348,7 +370,7 @@ func makeWriteCached() vmFunc {
 }
 
 // makeLoopOpen implements the brainfuck loop opening operation.
-func makeLoopOpen() vmFunc {
+func makeLoopOpen(offset int) vmFunc {
 	return func(v *VM) {
 		// early termination
 		if v.memory[v.ptr] != 0x00 {
@@ -356,12 +378,12 @@ func makeLoopOpen() vmFunc {
 			return
 		}
 
-		v.ip = v.loops[v.ip]
+		v.ip = offset
 	}
 }
 
 // makeLoopClose implements the brainfuck loop closing operation.
-func makeLoopClose() vmFunc {
+func makeLoopClose(offset int) vmFunc {
 	return func(v *VM) {
 
 		// early termination
@@ -370,7 +392,7 @@ func makeLoopClose() vmFunc {
 			return
 		}
 
-		v.ip = v.loops[v.ip]
+		v.ip = offset
 	}
 }
 

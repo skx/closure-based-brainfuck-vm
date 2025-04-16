@@ -2,12 +2,18 @@
 
 This repository contains a trivial interpreter for brainfuck, which is designed
 to demonstrate the usage of an interpreter which is faster than using a naive
-bytecode-based approach, and which instead uses a series of closures to
-implement each "op".
+bytecode-based approach.
 
-Instead of compiling a program into a series of bytecode values, which are then
-interpreted by a giant switch-statement we compile each small operation into a
-closure which can be implemented without the switch overhead, like so:
+Traditionally an interpreter will start by creating an AST, then walking it.
+When that works the next step is to update things to use the AST to generate
+some bytecode which can then be executed - it might even be that moving straight
+to bytecode makes sense as we know it is faster than the AST-walking approach.
+
+This interpreter has no AST because brainfuck is such a simple language, but
+rather than using the simple bytecode-based approach it instead uses a series
+of closures to implement each "op".
+
+This means the core of our loop is something like this:
 
     ...
 	for ip < len(code) {
@@ -15,8 +21,10 @@ closure which can be implemented without the switch overhead, like so:
 	}
     ..
 
-The functions each do their thing, and bump the IP to move to the next
-instruction.
+In short the compilation stage just appends dynamic functions (i.e closures) to
+a list, and the interpretation just involves walking that list of functions and
+invoking each in turn - as the functions have a pointer to the VM-object they
+can read/update the memory-cells etc.
 
 
 
@@ -65,3 +73,24 @@ This was inspired by the following article:
 
 It is hoped the implementation here is simple enough to understand, and still
 demonstrate a decent speedup compared to the more obvious naive approaches.
+
+
+
+## Links
+
+If you like brainfuck you might want to see my brainfuck compiler challenge:
+
+* [Brainfuck Compiler Challenge](https://github.com/skx/bfcc/)
+
+If you want to see a traditional bytecode-based interpreter, written for learning:
+
+* https://github.com/skx/go.vm
+
+If you want a _real_ bytecode compiler written in go:
+
+* https://github.com/skx/evalfilter
+
+And for something different, but related:
+
+* Writing a FORTH interpreter step by step, in golang
+  * https://github.com/skx/foth
